@@ -24,28 +24,29 @@ abstract type AbstractSteadyFlowParams <: AbstractParams end
 
 Construct a constant diffusivity problem with steady or time-varying flow.
 """
-noflow(args...) = 0.0 # used as defaults for u, v functions in Problem()
+noflow(args...) = 0 # used as defaults for u, v functions in Problem()
 
 Problem(; kwargs...) = ConstDiffProblem(; kwargs...) # only problem defined for now
 
 function flowargs(u)
   umethods = methods(u)
-  length(umethods.ms) == 1 ? umethods.ms[1].nargs-1 : error("Either define steadyflow or use a flow function
-    with only one argument.")
+  (length(umethods.ms) == 1 ?
+    umethods.ms[1].nargs-1 : error("Either define steadyflow or use a flow function with only one argument."))
 end
 
 function ConstDiffProblem(;
-    nx = 128,
-    Lx = 2π,
-    ny = nx,
-    Ly = Lx,
-  grid = TwoDGrid(nx, Lx, ny, Ly),
-   kap = 0.1,
-   eta = kap,
-     u = noflow,
-     v = noflow,
-    dt = 0.01,
-  stepper = "RK4",
+           T = Float64,
+          nx = 128,
+          Lx = 2π,
+          ny = nx,
+          Ly = Lx,
+        grid = TwoDGrid(nx, Lx, ny, Ly; T=T),
+         kap = 0.1,
+         eta = kap,
+           u = noflow,
+           v = noflow,
+          dt = 0.01,
+     stepper = "RK4",
   steadyflow = nothing
   )
 
@@ -57,8 +58,8 @@ function ConstDiffProblem(;
     end
   end
 
-  if steadyflow; pr = TracerAdvDiff.ConstDiffSteadyFlowParams(eta, kap, u, v, grid)
-  else;          pr = TracerAdvDiff.ConstDiffParams(eta, kap, u, v)
+  if steadyflow; pr = ConstDiffSteadyFlowParams(eta, kap, u, v, grid)
+  else;          pr = ConstDiffParams(eta, kap, u, v; T=T)
   end
 
   vs = TracerAdvDiff.Vars(grid)
@@ -87,7 +88,7 @@ struct ConstDiffParams{T} <: AbstractConstDiffParams
   u::Function            # Advecting x-velocity
   v::Function            # Advecting y-velocity
 end
-ConstDiffParams(eta, kap, u, v) = ConstDiffParams(eta, kap, 0eta, 0, u, v)
+ConstDiffParams(eta, kap, u, v; T=typeof(eta)) = ConstDiffParams{T}(eta, kap, 0, 0, u, v)
 
 """
     ConstDiffSteadyFlowParams(eta, kap, kaph, nkaph, u, v, g)
@@ -104,17 +105,14 @@ struct ConstDiffSteadyFlowParams{T} <: AbstractSteadyFlowParams
   v::Array{T,2}          # Advecting y-velocity
 end
 
-function ConstDiffSteadyFlowParams(eta, kap, kaph, nkaph, u, v, g)
-  if typeof(u) <: Function; ugrid = u.(g.X, g.Y)
-  else;                     ugrid = u
-  end
-  if typeof(v) <: Function; vgrid = v.(g.X, g.Y)
-  else;                     vgrid = v
-  end
-  ConstDiffSteadyFlowParams(eta, kap, kaph, nkaph, ugrid, vgrid)
+function ConstDiffSteadyFlowParams(eta, kap, kaph, nkaph, u, v, g::TwoDGrid; T=typeof(g.Lx))
+  ugrid = typeof(u) <: Function ? u.(g.x, g.y) : u
+  vgrid = typeof(v) <: Function ? v.(g.x, g.y) : v
+  ConstDiffSteadyFlowParams{T}(eta, kap, kaph, nkaph, ugrid, vgrid)
 end
 
-ConstDiffSteadyFlowParams(eta, kap, u, v, g) = ConstDiffSteadyFlowParams(eta, kap, 0eta, 0, u, v, g)
+ConstDiffSteadyFlowParams(eta, kap, u, v, g::TwoDGrid) = (
+  ConstDiffSteadyFlowParams(eta, kap, 0, 0, u, v, g))
 
 
 # --
@@ -126,16 +124,16 @@ ConstDiffSteadyFlowParams(eta, kap, u, v, g) = ConstDiffSteadyFlowParams(eta, ka
 
 Returns the equation for constant diffusivity problem with params p and grid g.
 """
-function Equation(p::ConstDiffParams, g)
-  LC = zero(g.Kr)
-  @. LC = -p.eta*g.kr^2 - p.kap*g.l^2 - p.kaph*g.KKrsq^p.nkaph
-  FourierFlows.Equation{typeof(LC[1, 1]),2}(LC, calcN!)
+function Equation(p::ConstDiffParams, g; T=typeof(g.Lx))
+  LC = zeros(T, g.nkr, g.nl)
+  @. LC = -p.eta*g.kr^2 - p.kap*g.l^2 - p.kaph*g.Krsq^p.nkaph
+  FourierFlows.Equation{T,2}(LC, calcN!)
 end
 
-function Equation(p::ConstDiffSteadyFlowParams, g)
-  LC = zero(g.Kr)
-  @. LC = -p.eta*g.kr^2 - p.kap*g.l^2 - p.kaph*g.KKrsq^p.nkaph
-  FourierFlows.Equation{typeof(LC[1, 1]),2}(LC, calcN_steadyflow!)
+function Equation(p::ConstDiffSteadyFlowParams, g; T=typeof(g.Lx))
+  LC = zeros(T, g.nkr, g.nl)
+  @. LC = -p.eta*g.kr^2 - p.kap*g.l^2 - p.kaph*g.Krsq^p.nkaph
+  FourierFlows.Equation{T,2}(LC, calcN_steadyflow!)
 end
 
 
@@ -178,7 +176,7 @@ function calcN!(N, sol, t, s, v, p::AbstractConstDiffParams, g)
   ldiv!(v.cx, g.rfftplan, v.cxh) # destroys v.cxh when using fftw
   ldiv!(v.cy, g.rfftplan, v.cyh) # destroys v.cyh when using fftw
 
-  @. v.cx = -p.u(g.X, g.Y, s.t)*v.cx - p.v(g.X, g.Y, s.t)*v.cy # copies over v.cx so v.cx = N in physical space
+  @. v.cx = -p.u(g.x, g.y, s.t)*v.cx - p.v(g.x, g.y, s.t)*v.cy # copies over v.cx so v.cx = N in physical space
   mul!(N, g.rfftplan, v.cx)
   nothing
 end
@@ -236,13 +234,12 @@ function set_c!(s, v, g, c)
 end
 
 function set_c!(s, v, g, c::Function)
-  cgrid = c.(g.X, g.Y)
+  cgrid = c.(g.x, g.y)
   mul!(s.sol, g.rfftplan, cgrid)
   updatevars!(s, v, g)
   nothing
 end
 
 set_c!(prob, c) = set_c!(prob.state, prob.vars, prob.grid, c)
-
 
 end # module
