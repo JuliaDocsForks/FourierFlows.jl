@@ -23,10 +23,8 @@ struct OneDGrid{T} <: AbstractOneDGrid
   kr::Array{T,1}
   invksq::Array{T,1}
   invkrsq::Array{T,1}
-
   fftplan::FFTW.cFFTWPlan{Complex{T},-1,false,1}
   rfftplan::FFTW.rFFTWPlan{T,-1,false,1}
-
   # Range objects that access the aliased part of the wavenumber range
   kalias::UnitRange{Int}
   kralias::UnitRange{Int}
@@ -83,19 +81,13 @@ struct TwoDGrid{T} <: AbstractTwoDGrid
   dy::T
   x::Array{T,2}
   y::Array{T,2}
-  X::Array{T,2}
-  Y::Array{T,2}
   k::Array{T,2}
   l::Array{T,2}
   kr::Array{T,2}
-  K::Array{T,2}
-  L::Array{T,2}
-  Kr::Array{T,2}
-  Lr::Array{T,2}
-  KKsq::Array{T,2}      # K^2 + L^2
-  invKKsq::Array{T,2}   # 1/KKsq, invKKsq[1, 1]=0
-  KKrsq::Array{T,2}     # Kr^2 + Lr^2
-  invKKrsq::Array{T,2}  # 1/KKrsq, invKKrsq[1, 1]=0
+  Ksq::Array{T,2}      # k^2 + l^2
+  invKsq::Array{T,2}   # 1/Ksq, invKsq[1, 1]=0
+  Krsq::Array{T,2}     # kr^2 + l^2
+  invKrsq::Array{T,2}  # 1/Krsq, invKrsq[1, 1]=0
 
   fftplan::FFTW.cFFTWPlan{Complex{T},-1,false,2}
   rfftplan::FFTW.rFFTWPlan{T,-1,false,2}
@@ -117,8 +109,6 @@ function TwoDGrid(nx, Lx, ny=nx, Ly=Lx; x0=-0.5*Lx, y0=-0.5*Ly, nthreads=Sys.CPU
   # Physical grid
   x = Array{T}(reshape(range(x0, step=dx, length=nx), (nx, 1)))
   y = Array{T}(reshape(range(y0, step=dy, length=ny), (1, ny)))
-  X = [ x[i] for i = 1:nx, j = 1:ny]
-  Y = [ y[j] for i = 1:nx, j = 1:ny]
 
   # Wavenubmer grid
   i1 = 0:Int(nx/2)
@@ -130,18 +120,13 @@ function TwoDGrid(nx, Lx, ny=nx, Ly=Lx; x0=-0.5*Lx, y0=-0.5*Ly, nthreads=Sys.CPU
   kr = reshape(2π/Lx*cat(i1, dims=1), (nkr, 1))
   l  = reshape(2π/Ly*cat(j1, j2, dims=1), (1, nl))
 
-  K = [ k[i] for i = 1:nk, j = 1:nl]
-  L = [ l[j] for i = 1:nk, j = 1:nl]
-  Kr = [ kr[i] for i = 1:nkr, j = 1:nl]
-  Lr = [ l[j]  for i = 1:nkr, j = 1:nl]
+  Ksq  = @. k^2 + l^2
+  invKsq = @. 1/Ksq
+  invKsq[1, 1] = 0
 
-  KKsq  = @. k^2 + l^2
-  invKKsq = 1 ./ KKsq
-  invKKsq[1, 1] = 0
-
-  KKrsq = @. kr^2 + l^2
-  invKKrsq = 1 ./ KKrsq
-  invKKrsq[1, 1] = 0
+  Krsq = @. kr^2 + l^2
+  invKrsq = @. 1/Krsq
+  invKrsq[1, 1] = 0
 
   # FFT plans
   FFTW.set_num_threads(nthreads)
@@ -156,8 +141,8 @@ function TwoDGrid(nx, Lx, ny=nx, Ly=Lx; x0=-0.5*Lx, y0=-0.5*Ly, nthreads=Sys.CPU
   kralias = iaL:nkr
   lalias  = jaL:jaR
 
-  TwoDGrid(nx, ny, nk, nl, nkr, Lx, Ly, dx, dy, x, y, X, Y,
-           k, l, kr, K, L, Kr, Lr, KKsq, invKKsq, KKrsq, invKKrsq,
+  TwoDGrid(nx, ny, nk, nl, nkr, Lx, Ly, dx, dy, x, y,
+           k, l, kr, Ksq, invKsq, Krsq, invKrsq,
            fftplan, rfftplan, kalias, kralias, lalias)
 end
 
