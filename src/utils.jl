@@ -126,22 +126,23 @@ Generate a real and random two-dimensional vorticity field q(x, y) with
 a Fourier spectrum peaked around a central non-dimensional wavenumber kpeak and
 normalized so that its total energy is E0.
 """
-function peakedisotropicspectrum(g::TwoDGrid, kpeak::Real, E0::Real; mask=ones(size(g.Kr)), allones=false)
-  if g.Lx !== g.Ly
-      error("the domain is not square")
-  else
-    k0 = kpeak*2π/g.Lx
-    modk = sqrt.(g.KKrsq)
-    psik = zeros(g.nk, g.nl)
-    psik =  (modk.^2 .* (1 .+ (modk/k0).^4)).^(-0.5)
-    psik[1, 1] = 0.0
-    psih = (randn(g.nkr, g.nl)+im*randn(g.nkr, g.nl)).*psik
-    if allones; psih = psik; end
-    psih = psih.*mask
-    Ein = real(sum(g.KKrsq.*abs2.(psih)/(g.nx*g.ny)^2))
-    psih = psih*sqrt(E0/Ein)
-    q = -irfft(g.KKrsq.*psih, g.nx)
-  end
+function peakedisotropicspectrum(g, kpeak, E0; mask=1, allones=false)
+  g.Lx == g.Ly || error("the domain is not square")
+
+  T = typeof(g.Lx)
+  kc = kpeak * 2π/g.Lx
+  K = @. sqrt(g.Krsq)
+
+  psik = @. 1 / sqrt( K^2 * (1 + (K/kc)^4) )
+  psik[1, 1] = 0
+
+  Φ = allones ? 0 : randn(T, g.nkr, g.nl) .+ im.*randn(T, g.nkr, g.nl)
+  psih = @. mask * psik * exp(im*Φ)
+    
+  Ei = parsevalsum2(K.*psih, g) / (g.Lx*g.Ly)
+  psih *= sqrt(E0/Ei)
+
+  -irfft(g.Krsq.*psih, g.nx)
 end
 
 
