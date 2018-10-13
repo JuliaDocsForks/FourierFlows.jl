@@ -22,9 +22,9 @@ function test_constvel(stepper, dt, nsteps)
   σ = 0.1
   c0func(x, y) = 0.1*exp.(-(x.^2+y.^2)/(2σ^2))
 
-  c0 = c0func.(g.X, g.Y)
+  c0 = c0func.(g.x, g.y)
   tfinal = nsteps*dt
-  cfinal = c0func.(g.X .- uvel*tfinal, g.Y .- vvel*tfinal)
+  cfinal = @. c0func(g.x-uvel*tfinal, g.y-vvel*tfinal)
 
   TracerAdvDiff.set_c!(prob, c0)
 
@@ -61,9 +61,9 @@ function test_timedependentvel(stepper, dt, tfinal)
   σ = 0.1
   c0func(x, y) = 0.1*exp.(-(x.^2+y.^2)/(2σ^2))
 
-  c0 = c0func.(g.X, g.Y)
+  c0 = c0func.(g.x, g.y)
   tfinal = nsteps*dt
-  cfinal = c0func.(g.X .- uvel*tfinal, g.Y)
+  cfinal = @. c0func(g.x - uvel*tfinal, g.y)
 
   TracerAdvDiff.set_c!(prob, c0func)
 
@@ -99,10 +99,10 @@ function test_diffusion(stepper, dt, tfinal; steadyflow = true)
   c0ampl, σ = 0.1, 0.1
   c0func(x, y) = c0ampl*exp.(-(x.^2+y.^2)/(2σ^2))
 
-  c0 = c0func.(g.X, g.Y)
+  c0 = c0func.(g.x, g.y)
   tfinal = nsteps*dt
   σt = sqrt(2*kap*tfinal + σ^2)
-  cfinal = c0ampl*σ^2/σt^2 * exp.(-(g.X.^2 + g.Y.^2)/(2*σt^2))
+  cfinal = @. c0ampl*σ^2/σt^2 * exp(-(g.x^2 + g.y^2)/(2*σt^2))
 
   TracerAdvDiff.set_c!(prob, c0)
 
@@ -135,9 +135,10 @@ function test_hyperdiffusion(stepper, dt, tfinal; steadyflow = true)
       error("tfinal is not multiple of dt")
   end
 
-   g = TwoDGrid(nx, Lx)
+  g = TwoDGrid(nx, Lx)
 
-  u, v = 0*g.X, 0*g.X
+  u = zeros(g.nx, g.ny)
+  v = zeros(g.nx, g.ny)
 
   vs = TracerAdvDiff.Vars(g)
   pr = TracerAdvDiff.ConstDiffSteadyFlowParams(eta, kap, kaph, nkaph, u, v, g)
@@ -146,12 +147,12 @@ function test_hyperdiffusion(stepper, dt, tfinal; steadyflow = true)
   prob = FourierFlows.Problem(g, vs, pr, eq, ts)
 
   c0ampl, σ = 0.1, 0.1
-  c0func(x, y) = c0ampl*exp.(-(x.^2+y.^2)/(2σ^2))
+  c0func(x, y) = c0ampl*exp(-(x^2+y^2)/(2σ^2))
 
-  c0 = c0func.(g.X, g.Y)
+  c0 = c0func.(g.x, g.y)
   tfinal = nsteps*dt
   σt = sqrt(2*kaph*tfinal + σ^2)
-  cfinal = c0ampl*σ^2/σt^2 * exp.(-(g.X.^2 + g.Y.^2)/(2*σt^2))
+  cfinal = @. c0ampl*σ^2/σt^2 * exp(-(g.x^2 + g.y^2)/(2*σt^2))
 
   TracerAdvDiff.set_c!(prob, c0)
 

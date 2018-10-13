@@ -1,8 +1,4 @@
-using Random
-import LinearAlgebra: norm, mul!, ldiv!
-
-
-module mytestmodule
+module Testmodule
 
 using FourierFlows, FFTW
 import LinearAlgebra: norm, mul!, ldiv!
@@ -64,7 +60,6 @@ end
 
 end #module
 
-
 function testsimplediagnostics()
     nx = 16
     Lx = 2π
@@ -72,25 +67,25 @@ function testsimplediagnostics()
     dt = 0.01
 
     g = OneDGrid(nx, Lx)
-    p = mytestmodule.Params(mu)
-    v = mytestmodule.Vars(g)
-    eq = mytestmodule.Equation(p, g)
+    p = Testmodule.Params(mu)
+    v = Testmodule.Vars(g)
+    eq = Testmodule.Equation(p, g)
     ts = FourierFlows.ETDRK4TimeStepper(dt, eq.LC)
     prob = FourierFlows.Problem(g, v, p, eq, ts)
 
     Random.seed!(1234)
      u0 = randn(size(g.x))
 
-    mytestmodule.set_u!(prob, u0)
+    Testmodule.set_u!(prob, u0)
 
     nsteps = 200
     extrasteps = 20
 
     freqE = 2
-    E = Diagnostic(mytestmodule.pseudoenergy, prob; nsteps=nsteps, freq=freqE)
+    E = Diagnostic(Testmodule.pseudoenergy, prob; nsteps=nsteps, freq=freqE)
 
     freqZ = 1
-    Z = Diagnostic(mytestmodule.pseudoenstrophy, prob; nsteps=nsteps, freq=freqZ)
+    Z = Diagnostic(Testmodule.pseudoenstrophy, prob; nsteps=nsteps, freq=freqZ)
 
     diags = [E, Z]
 
@@ -126,5 +121,3 @@ function testsimplediagnostics()
      isapprox(norm(Z.data), norm(Z.data[1]*exp.(-2*mu*Z.time)), rtol=1e-13)
     )
 end
-
-@test testsimplediagnostics()

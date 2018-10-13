@@ -1,38 +1,13 @@
-using 
-  FourierFlows.TracerAdvDiff,
-  FFTW
-
-using LinearAlgebra: mul!, ldiv!
-
-# Dictionary of (stepper, nsteps) pairs to test. Each stepper is tested by
-# stepping forward nstep times.
-steppersteps = Dict([
-  ("ForwardEuler", 2000),
-  ("FilteredForwardEuler", 2000),
-  ("AB3", 400),
-  ("FilteredAB3", 400),
-  ("RK4", 40),
-  ("FilteredRK4", 40),
-  ("ETDRK4", 40),
-  ("FilteredETDRK4", 40)
-])
-
-dualsteppersteps = Dict([
-  ("DualRK4", 40),
-  ("DualFilteredRK4", 40),
-  ("DualETDRK4", 40),
-  ("DualFilteredETDRK4", 40),
-])
-
 function tracerdiffusionproblem(nx=16, ny=2, Lx=2π, kap=1e-2; nsteps=100, stepper="ForwardEuler")
   k1 = 2π/Lx
   dt = 1e-9 / (kap*k1^2) # resolved?
   prob = TracerAdvDiff.ConstDiffProblem(nx=nx, Lx=Lx, ny=ny, kap=kap, dt=dt, stepper=stepper, steadyflow=true)
   g = prob.grid
+  X, Y = gridpoints(g)
 
   t1 = dt*nsteps
-  c0 = @. sin(k1*g.X)
-  c1 = @. exp(-kap*k1^2*t1) * sin(k1*g.X) # analytical solution
+  c0 = @. sin(k1*X)
+  c1 = @. exp(-kap*k1^2*t1) * sin(k1*X) # analytical solution
 
   set_c!(prob, c0)
   stepforward!(prob, nsteps)
@@ -43,10 +18,6 @@ end
 function tracerdiffusiontest(args...; kwargs...)
   prob, c0, c1, nsteps = tracerdiffusionproblem(args...; kwargs...)
   isapprox(c1, prob.vars.c, rtol=prob.grid.nx^2*nsteps*1e-13)
-end
-
-for (stepper, steps) in steppersteps
-  @test tracerdiffusiontest(; stepper=stepper, nsteps=steps)
 end
 
 #=
